@@ -131,7 +131,7 @@ class DeviceAuthorization:
         info.device_class = self._read_sysfs_attr(sysfs_path, "bDeviceClass", "00")
         info.device_subclass = self._read_sysfs_attr(sysfs_path, "bDeviceSubClass", "00")
         info.device_protocol = self._read_sysfs_attr(sysfs_path, "bDeviceProtocol", "00")
-        info.num_interfaces = int(self._read_sysfs_attr(sysfs_path, "bNumInterfaces", "0"))
+        info.num_interfaces = self._read_sysfs_int(sysfs_path, "bNumInterfaces", 0)
         info.speed = self._read_sysfs_attr(sysfs_path, "speed", "")
         info.authorized = self._read_sysfs_attr(sysfs_path, "authorized", "0") == "1"
         
@@ -148,10 +148,20 @@ class DeviceAuthorization:
         attr_path = device_path / attr
         try:
             if attr_path.exists():
-                return attr_path.read_text().strip()
+                value = attr_path.read_text().strip()
+                # Return default if value is empty (device may be deauthorized)
+                return value if value else default
         except (PermissionError, OSError) as e:
             logger.debug(f"Cannot read {attr_path}: {e}")
         return default
+    
+    def _read_sysfs_int(self, device_path: Path, attr: str, default: int = 0) -> int:
+        """Read a sysfs attribute file and convert to int."""
+        value = self._read_sysfs_attr(device_path, attr, "")
+        try:
+            return int(value) if value else default
+        except ValueError:
+            return default
     
     def _get_interface_classes(self, device_path: Path) -> list[str]:
         """Get all interface classes for a device."""
