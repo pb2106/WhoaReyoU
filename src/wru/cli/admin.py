@@ -42,22 +42,44 @@ def cli():
 @async_command
 async def status():
     """Show WRU daemon status."""
-    # Check if daemon is running via systemd
+    # Check if daemon is running via systemd or as a process
     import subprocess
     
+    # Check systemd first
     result = subprocess.run(
         ["systemctl", "is-active", "wru-daemon"],
         capture_output=True,
         text=True
     )
+    is_systemd_active = result.stdout.strip() == "active"
     
-    is_running = result.stdout.strip() == "active"
+    # Also check if any WRU daemon process is running
+    is_process_running = False
+    for pattern in ["wru.core.daemon", "wru_namespace_daemon", "wru-daemon"]:
+        result = subprocess.run(
+            ["pgrep", "-f", pattern],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            is_process_running = True
+            break
+    
+    is_running = is_systemd_active or is_process_running
+    
+    # Determine status text
+    if is_systemd_active:
+        status_text = ("● Running (systemd)", "green bold")
+    elif is_process_running:
+        status_text = ("● Running (manual)", "green bold")
+    else:
+        status_text = ("○ Stopped", "red bold")
     
     status_panel = Panel(
         Text.assemble(
             ("WRU Daemon Status\n\n", "bold"),
             ("Status: ", ""),
-            ("● Running", "green bold") if is_running else ("○ Stopped", "red bold"),
+            status_text,
             ("\n\nProtection Layers:\n", ""),
             ("  ✓ ", "green") if is_running else ("  ○ ", "dim"),
             ("Layer 0: Initramfs Hub Control\n"),
