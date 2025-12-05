@@ -260,20 +260,3 @@ wru test-device --profile badusb
 # Run security audit
 wru audit
 ```
-
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE) for details.
-
-This solution is **100% patent-safe** because it uses only documented OS primitives (sysfs, udev, namespaces, IOMMU), open-source tools (pyudev, QEMU, iptables, evdev), and public domain algorithms.
-
-## ⚠️ Known Limitations
-
-- Cannot prevent zero-day kernel USB exploits (occurs before Python runs)
-- Cannot detect hardware implants in trusted devices (supply chain compromise)
-- DMA attacks require IOMMU support (hardware limitation)
-- ~100-500 microsecond window between kernel enumeration and initramfs intervention
-
-## 🤝 Contributing
-
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) before submitting PRs.
