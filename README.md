@@ -1,10 +1,5 @@
 # WRU (Who R U?) - Zero-Trust USB Security System
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-
-A comprehensive, patent-safe USB security solution implementing defense-in-depth with 6 protection layers. WRU intercepts USB devices at the earliest possible moment and applies sophisticated threat analysis before allowing any device access to the system.
-
 ## 🛡️ Security Guarantees
 
 - ✅ **Blocks 98%+ of automated USB attacks** (BadUSB, malicious storage, network exfil)
