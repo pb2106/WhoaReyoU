@@ -371,10 +371,17 @@ async def logs(follow: bool, lines: int, severity: Optional[str]):
 @async_command
 async def incidents():
     """List security incidents."""
+    import os
     from wru.forensics.incident import IncidentResponder
     
-    responder = IncidentResponder()
-    incidents = await responder.list_all_incidents()
+    try:
+        responder = IncidentResponder()
+        incidents = await responder.list_all_incidents()
+    except PermissionError:
+        console.print("[red]✗ Permission denied accessing incident logs[/]")
+        if os.geteuid() != 0:
+            console.print("[yellow]⚠ Try running with sudo: sudo wru incidents[/]")
+        sys.exit(1)
     
     if not incidents:
         console.print("[green]No incidents recorded[/]")
