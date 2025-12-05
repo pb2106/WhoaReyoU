@@ -1,0 +1,52 @@
+[Unit]
+Description=WRU USB Security Daemon
+Documentation=https://github.com/example/wru
+After=network.target local-fs.target
+Wants=network.target
+
+[Service]
+Type=simple
+
+# Create directories before applying namespace restrictions
+# The + prefix runs this command as root OUTSIDE of any namespace restrictions
+ExecStartPre=+/usr/bin/mkdir -p /run/wru /var/log/wru /etc/wru
+
+ExecStart=/usr/bin/python3 -m wru.core.daemon
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Use RuntimeDirectory for automatic cleanup
+RuntimeDirectory=wru
+RuntimeDirectoryMode=0755
+LogsDirectory=wru
+LogsDirectoryMode=0755
+ConfigurationDirectory=wru
+ConfigurationDirectoryMode=0755
+
+# Security hardening - use 'full' instead of 'strict' to allow writes to /run, /var
+NoNewPrivileges=no
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=yes
+ProtectKernelTunables=no
+ProtectKernelModules=no
+ProtectControlGroups=yes
+
+# Allow access to USB sysfs and device nodes
+ReadWritePaths=/sys/bus/usb /dev
+
+# Capabilities needed for USB authorization
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_NET_ADMIN CAP_DAC_OVERRIDE CAP_CHOWN CAP_FOWNER
+AmbientCapabilities=CAP_SYS_ADMIN CAP_NET_ADMIN CAP_DAC_OVERRIDE CAP_CHOWN CAP_FOWNER
+
+# Restart policy
+Restart=on-failure
+RestartSec=5s
+WatchdogSec=30s
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wru-daemon
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,82 @@
+# WRU USB Security System - udev Rules
+# These rules implement Layer 1: Dual Barrier Enforcement
+#
+# All USB device nodes are immediately set to mode 000 (no access)
+# until the WRU daemon authorizes them.
+#
+# Install to: /etc/udev/rules.d/80-usb-quarantine.rules
+
+# ============================================================
+# STORAGE DEVICES - Block device nodes for USB storage
+# ============================================================
+
+# Block devices (USB mass storage)
+KERNEL=="sd[a-z]", SUBSYSTEMS=="usb", ACTION=="add", MODE="0000", OWNER="root", GROUP="root"
+KERNEL=="sd[a-z][0-9]", SUBSYSTEMS=="usb", ACTION=="add", MODE="0000", OWNER="root", GROUP="root"
+KERNEL=="sd[a-z][0-9][0-9]", SUBSYSTEMS=="usb", ACTION=="add", MODE="0000", OWNER="root", GROUP="root"
+
+# ============================================================
+# HID DEVICES - Keyboards, mice, and other input devices
+# ============================================================
+
+# HID raw devices
+KERNEL=="hidraw[0-9]*", SUBSYSTEMS=="usb", ACTION=="add", MODE="0000", OWNER="root", GROUP="root"
+
+# Input event devices
+KERNEL=="event[0-9]*", SUBSYSTEMS=="usb", ACTION=="add", MODE="0000", OWNER="root", GROUP="root"
+
+# Input mice devices  
+KERNEL=="mouse[0-9]*", SUBSYSTEMS=="usb", ACTION=="add", MODE="0000", OWNER="root", GROUP="root"
+
+# Joystick devices
+KERNEL=="js[0-9]*", SUBSYSTEMS=="usb", ACTION=="add", MODE="0000", OWNER="root", GROUP="root"
+
+# ============================================================
+# NETWORK DEVICES - USB network adapters
+# ============================================================
+
+# USB Ethernet adapters - isolate via network namespace
+SUBSYSTEM=="net", DRIVERS=="?*", ATTRS{businfo}=="usb*", ACTION=="add", \
+    RUN+="/usr/local/bin/wru-net-isolate %k"
+
+# ============================================================
+# SERIAL DEVICES - USB serial adapters
+# ============================================================
+
+KERNEL=="ttyUSB[0-9]*", SUBSYSTEMS=="usb", ACTION=="add", MODE="0000", OWNER="root", GROUP="root"
+KERNEL=="ttyACM[0-9]*", SUBSYSTEMS=="usb", ACTION=="add", MODE="0000", OWNER="root", GROUP="root"
+
+# ============================================================
+# VIDEO DEVICES - USB cameras
+# ============================================================
+
+KERNEL=="video[0-9]*", SUBSYSTEMS=="usb", ACTION=="add", MODE="0000", OWNER="root", GROUP="root"
+
+# ============================================================
+# AUDIO DEVICES - USB audio
+# ============================================================
+
+KERNEL=="snd/*", SUBSYSTEMS=="usb", ACTION=="add", MODE="0000", OWNER="root", GROUP="root"
+
+# ============================================================
+# WRU DAEMON NOTIFICATION
+# ============================================================
+
+# Notify WRU daemon of all USB device events
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ACTION=="add", \
+    RUN+="/usr/local/bin/wru-notify add %k"
+
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ACTION=="remove", \
+    RUN+="/usr/local/bin/wru-notify remove %k"
+
+# ============================================================
+# ALLOW RULES FOR ESSENTIAL DEVICES (Optional)
+# ============================================================
+# Uncomment these if you have devices that must always work
+# (e.g., internal USB hubs, USB keyboard for BIOS access)
+
+# Example: Allow internal USB hub
+# SUBSYSTEM=="usb", ATTR{idVendor}=="xxxx", ATTR{idProduct}=="yyyy", MODE="0644"
+
+# Example: Allow specific keyboard for BIOS/boot access
+# KERNEL=="hidraw*", ATTRS{idVendor}=="xxxx", ATTRS{idProduct}=="yyyy", MODE="0644"

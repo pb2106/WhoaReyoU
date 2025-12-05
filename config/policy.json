@@ -1,0 +1,39 @@
+{
+    "version": 1,
+    "description": "WRU USB Device Policy - Allowlist and Blocklist",
+    "allowlist": [
+        {
+            "comment": "Example: Internal USB hub",
+            "vendor_id": "1d6b",
+            "product_id": "0002",
+            "description": "Linux Foundation USB 2.0 Hub"
+        },
+        {
+            "comment": "Example: Trusted Logitech receiver (use your actual serial)",
+            "vendor_id": "046d",
+            "product_id": "c52b",
+            "serial": "*",
+            "description": "Logitech Unifying Receiver"
+        }
+    ],
+    "blocklist": [
+        {
+            "comment": "Generic test VID - common in attack tools",
+            "vendor_id": "1234",
+            "description": "Generic development VID"
+        },
+        {
+            "comment": "Known Rubber Ducky signature",
+            "vendor_id": "05ac",
+            "product_id": "021e",
+            "description": "USB Rubber Ducky (Apple keyboard impersonation)"
+        },
+        {
+            "comment": "Teensy with HID - common BadUSB platform",
+            "vendor_id": "16c0",
+            "product_id": "0486",
+            "description": "Teensy USB keyboard"
+        }
+    ],
+    "temporary_allow": []
+}

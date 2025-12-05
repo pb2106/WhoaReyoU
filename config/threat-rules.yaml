@@ -1,0 +1,69 @@
+# WRU Threat Rules Configuration
+# 
+# Configure threat scoring heuristics and decision thresholds.
+# Reload daemon after changes: systemctl reload wru-daemon
+
+# Decision thresholds
+# Score ranges determine automatic actions:
+#   0 to allow:      Auto-allow (trusted device)
+#   allow+1 to quarantine: Quarantine (wait for user approval)
+#   quarantine+1 to analyze: Deep analysis required
+#   analyze+1 to 100: Auto-deny (dangerous device)
+thresholds:
+  allow: 19
+  quarantine: 39
+  analyze: 69
+
+# Heuristic scoring weights
+# Adjust these to tune sensitivity for your environment
+heuristics:
+  # Composite device indicators (BadUSB signatures)
+  hid_storage_composite: 50    # Keyboard + Mass Storage = classic BadUSB
+  hid_network_composite: 40    # Keyboard + Network = keylogger with exfil
+  
+  # Device identity issues
+  missing_serial: 30           # No/generic serial number
+  unknown_manufacturer: 15     # Missing manufacturer string
+  high_risk_vendor: 35         # Known attack tool vendor IDs
+  
+  # Interface complexity
+  vendor_specific_interface: 25  # Vendor-specific class (0xFF)
+  multiple_interfaces: 20        # 3+ interface classes
+  
+  # Behavioral patterns
+  rapid_replug: 25             # >3 connects in 60 seconds
+  descriptor_mutation: 45      # Descriptor changes after connect
+  
+  # Database matches
+  cve_match: 60                # Known CVE for this device
+
+# High-risk vendor IDs
+# These VIDs are commonly used in development boards and attack tools
+high_risk_vendors:
+  - "1234"  # Generic test VID
+  - "16c0"  # Teensy/PJRC
+  - "2341"  # Arduino
+  - "0483"  # STMicroelectronics
+  - "1d50"  # OpenMoko
+  - "03eb"  # Atmel
+  - "1fc9"  # NXP LPC
+
+# Feature toggles
+features:
+  cve_matching: true
+  pattern_analysis: true
+  hid_monitoring: true
+  network_isolation: true
+  vm_analysis: false           # Requires QEMU + VM image
+  clamav_scanning: true
+
+# HID monitoring thresholds
+hid_monitor:
+  max_keystrokes_per_second: 15.0    # Human max ~10
+  min_human_cv: 0.3                   # Coefficient of variation for human typing
+  machine_max_cv: 0.15                # CV threshold for automated typing
+
+# Network isolation settings
+network_isolation:
+  capture_duration_seconds: 10
+  beaconing_threshold: 5              # Max DNS queries to same domain

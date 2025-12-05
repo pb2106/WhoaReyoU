@@ -1,0 +1,2 @@
+[console_scripts]
+wru = wru.cli.admin:main

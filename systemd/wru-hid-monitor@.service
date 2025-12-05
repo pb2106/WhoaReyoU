@@ -1,0 +1,35 @@
+[Unit]
+Description=WRU HID Monitor for %I
+Documentation=https://github.com/example/wru
+After=wru-daemon.service
+BindsTo=wru-daemon.service
+PartOf=wru-daemon.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -m wru.runtime.hid_monitor --device %I
+
+# Security
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/
+
+# Allow access to input device
+ReadWritePaths=/dev/input
+
+# Needs to be able to lock screen
+AmbientCapabilities=CAP_SYS_ADMIN
+
+# Restart on failure
+Restart=on-failure
+RestartSec=1s
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wru-hid-%I
+
+[Install]
+WantedBy=wru-daemon.service
