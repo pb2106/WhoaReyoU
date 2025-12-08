@@ -368,6 +368,127 @@ async def logs(follow: bool, lines: int, severity: Optional[str]):
 
 
 @cli.command()
+@click.argument("bus_id")
+@click.option("--scan", is_flag=True, help="Run ClamAV malware scan")
+@click.option("--approve", is_flag=True, help="Approve device after preview/scan")
+@click.option("--path", default="/", help="Directory to list (default: root)")
+@async_command
+async def preview(bus_id: str, scan: bool, approve: bool, path: str):
+    """
+    Preview USB storage device files safely.
+    
+    Uses namespace isolation to mount device read-only
+    without exposing it to the host system.
+    
+    Examples:
+        wru preview 1-6           # List files
+        wru preview 1-6 --scan    # Scan with ClamAV
+        wru preview 1-6 --approve # Approve after review
+    """
+    import os
+    from wru.analysis.storage_preview import StoragePreview, StorageInfo
+    from wru.core.authorization import DeviceAuthorization
+    
+    # Check for root (needed for namespace operations)
+    if os.geteuid() != 0:
+        console.print("[red]✗ Preview requires root privileges[/]")
+        console.print("[yellow]⚠ Run with sudo: sudo wru preview " + bus_id + "[/]")
+        sys.exit(1)
+    
+    preview_module = StoragePreview()
+    auth = DeviceAuthorization()
+    
+    # First check if device exists and is storage
+    device = auth.get_device_info(bus_id)
+    if not device:
+        console.print(f"[red]✗ Device {bus_id} not found[/]")
+        sys.exit(1)
+    
+    if not device.has_storage:
+        console.print(f"[yellow]⚠ Device {bus_id} is not a storage device[/]")
+        console.print("[dim]Use 'wru allow' for non-storage devices[/]")
+        sys.exit(1)
+    
+    # Get storage info
+    console.print(f"[bold]Previewing storage device {bus_id}[/]")
+    console.print(f"[dim]Device: {device.manufacturer or 'Unknown'} {device.product or 'Unknown'}[/]")
+    console.print()
+    
+    with console.status("[blue]Finding device node..."):
+        storage_info = await preview_module.get_storage_info(bus_id)
+    
+    if not storage_info or not storage_info.device_node:
+        console.print("[red]✗ Could not find storage device node[/]")
+        console.print("[dim]The device may not have usb-storage driver bound[/]")
+        sys.exit(1)
+    
+    console.print(f"[green]✓ Found device: {storage_info.device_node}[/]")
+    if storage_info.partition_nodes:
+        console.print(f"[dim]  Partitions: {', '.join(str(p) for p in storage_info.partition_nodes)}[/]")
+    console.print()
+    
+    # Run ClamAV scan if requested
+    if scan:
+        console.print("[bold blue]Running ClamAV scan (this may take a while)...[/]")
+        with console.status("[blue]Scanning..."):
+            scan_result = await preview_module.scan_storage(bus_id)
+        
+        if scan_result.error:
+            console.print(f"[red]✗ Scan error: {scan_result.error}[/]")
+        elif scan_result.clean:
+            console.print(f"[green]✓ No malware detected[/] [dim](scan took {scan_result.scan_time_seconds:.1f}s)[/]")
+        else:
+            console.print(f"[red]✗ MALWARE DETECTED! ({len(scan_result.infected_files)} infected files)[/]")
+            for f in scan_result.infected_files[:10]:
+                console.print(f"  [red]• {f}[/]")
+            console.print("[bold red]DO NOT APPROVE this device![/]")
+            sys.exit(1)
+        console.print()
+    
+    # List files
+    console.print(f"[bold]Files in {path}:[/]")
+    with console.status("[blue]Listing files..."):
+        files = await preview_module.list_files(bus_id, path)
+    
+    if not files:
+        console.print("[dim]  (empty or unable to read)[/]")
+    else:
+        table = Table()
+        table.add_column("Name", style="cyan")
+        table.add_column("Size", justify="right")
+        table.add_column("Type")
+        
+        for f in sorted(files, key=lambda x: (not x.is_dir, x.name.lower())):
+            size_str = "" if f.is_dir else _format_size(f.size)
+            type_str = "[blue]📁 DIR[/]" if f.is_dir else "[dim]📄 FILE[/]"
+            table.add_row(f.name, size_str, type_str)
+        
+        console.print(table)
+    console.print()
+    
+    # Approve if requested
+    if approve:
+        if scan:
+            console.print("[bold green]Approving device...[/]")
+            if await auth.authorize(bus_id):
+                console.print(f"[green]✓ Device {bus_id} authorized[/]")
+            else:
+                console.print(f"[red]✗ Failed to authorize device[/]")
+                sys.exit(1)
+        else:
+            console.print("[yellow]⚠ Run with --scan before approving: sudo wru preview " + bus_id + " --scan --approve[/]")
+            sys.exit(1)
+
+
+def _format_size(size: int) -> str:
+    """Format file size in human-readable format."""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size < 1024:
+            return f"{size:.0f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
+
+@cli.command()
 @async_command
 async def incidents():
     """List security incidents."""

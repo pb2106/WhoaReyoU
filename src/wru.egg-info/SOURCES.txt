@@ -12,6 +12,7 @@ src/wru/analysis/__init__.py
 src/wru/analysis/clamav.py
 src/wru/analysis/filesystem.py
 src/wru/analysis/namespace.py
+src/wru/analysis/storage_preview.py
 src/wru/analysis/vm.py
 src/wru/cli/__init__.py
 src/wru/cli/admin.py

@@ -71,7 +71,22 @@ class DeviceInfo:
     @property
     def has_storage(self) -> bool:
         """Check if device has mass storage interface."""
-        return self.has_interface_class("08")
+        # Primary check: interface class
+        if self.has_interface_class("08"):
+            return True
+        
+        # Fallback: check product name for storage-related keywords
+        # (needed when device is deauthorized and interface info unavailable)
+        if self.product:
+            storage_keywords = [
+                "storage", "mass storage", "flash", "drive", "disk",
+                "usb stick", "pendrive", "memory", "card reader"
+            ]
+            product_lower = self.product.lower()
+            if any(kw in product_lower for kw in storage_keywords):
+                return True
+        
+        return False
     
     @property
     def has_network(self) -> bool:

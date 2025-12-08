@@ -38,6 +38,7 @@ class HeuristicScorer:
     DEFAULT_WEIGHTS = {
         "hid_storage_composite": 50,
         "hid_network_composite": 40,
+        "mass_storage_only": 35,      # Storage devices need preview before access
         "missing_serial": 30,
         "vendor_specific_interface": 25,
         "multiple_interfaces": 20,
@@ -87,6 +88,7 @@ class HeuristicScorer:
         heuristics = [
             self._check_hid_storage_composite,
             self._check_hid_network_composite,
+            self._check_mass_storage_only,
             self._check_missing_serial,
             self._check_vendor_specific_interface,
             self._check_multiple_interfaces,
@@ -141,6 +143,26 @@ class HeuristicScorer:
                         i for i in device.interfaces 
                         if i.startswith("02") or i.startswith("0a")
                     ],
+                }
+            )
+        return None
+    
+    def _check_mass_storage_only(self, device: DeviceInfo) -> Optional[HeuristicResult]:
+        """
+        Check for mass storage device.
+        
+        Storage devices pose malware risk and should go through
+        isolated preview before being granted access.
+        
+        Note: HID+Storage combo is caught by different heuristic with higher score.
+        """
+        if device.has_storage and not device.has_hid:
+            return HeuristicResult(
+                score=self.weights["mass_storage_only"],
+                reason="Mass storage device (requires isolated preview before access)",
+                indicator="mass_storage_only",
+                details={
+                    "storage_interfaces": [i for i in device.interfaces if i.startswith("08")],
                 }
             )
         return None

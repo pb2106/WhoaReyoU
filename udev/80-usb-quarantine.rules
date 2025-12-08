@@ -7,10 +7,25 @@
 # Install to: /etc/udev/rules.d/80-usb-quarantine.rules
 
 # ============================================================
+# USB MASS STORAGE - KERNEL LEVEL DEAUTHORIZATION
+# ============================================================
+# This is the critical rule - deauthorize storage devices at USB level
+# This MUST run before the default USB drivers bind
+# The device will not be usable until 'wru allow' or 'wru preview --approve'
+
+# Deauthorize USB Mass Storage devices (interface class 08) at kernel level
+SUBSYSTEM=="usb", ACTION=="add", ATTR{bInterfaceClass}=="08", \
+    RUN+="/bin/sh -c 'echo 0 > /sys$devpath/../authorized'"
+
+# Also match by device class for bulk-only transport
+SUBSYSTEM=="usb", ACTION=="add", ATTR{bDeviceClass}=="00", ATTR{bInterfaceClass}=="08", \
+    RUN+="/bin/sh -c 'echo 0 > /sys$devpath/../authorized'"
+
+# ============================================================
 # STORAGE DEVICES - Block device nodes for USB storage
 # ============================================================
 
-# Block devices (USB mass storage)
+# Block devices (USB mass storage) - secondary protection
 KERNEL=="sd[a-z]", SUBSYSTEMS=="usb", ACTION=="add", MODE="0000", OWNER="root", GROUP="root"
 KERNEL=="sd[a-z][0-9]", SUBSYSTEMS=="usb", ACTION=="add", MODE="0000", OWNER="root", GROUP="root"
 KERNEL=="sd[a-z][0-9][0-9]", SUBSYSTEMS=="usb", ACTION=="add", MODE="0000", OWNER="root", GROUP="root"
