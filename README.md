@@ -1,15 +1,15 @@
 # WRU (Who R U?) - Zero-Trust USB Security System
 
-## 🛡️ Security Guarantees
+##  Security Guarantees
 
-- ✅ **Blocks 98%+ of automated USB attacks** (BadUSB, malicious storage, network exfil)
-- ✅ **Reduces exposure window to <1ms** (initramfs intervention)
-- ✅ **Prevents host filesystem contamination** (namespace isolation)
-- ✅ **Detects firmware-level attacks** (VM behavioral analysis)
-- ✅ **Stops keystroke injection** (HID timing analysis)
-- ✅ **Provides complete audit trail** (forensic logging)
+-  **Blocks 98%+ of automated USB attacks** (BadUSB, malicious storage, network exfil)
+-  **Reduces exposure window to <1ms** (initramfs intervention)
+-  **Prevents host filesystem contamination** (namespace isolation)
+-  **Detects firmware-level attacks** (VM behavioral analysis)
+-  **Stops keystroke injection** (HID timing analysis)
+-  **Provides complete audit trail** (forensic logging)
 
-## 🏗️ Architecture
+##  Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -65,7 +65,7 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 📦 Installation
+##  Installation
 
 ### Prerequisites
 
@@ -97,7 +97,7 @@ pip install -e .
 sudo ./scripts/install.sh
 ```
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Start the Daemon
 
@@ -132,7 +132,7 @@ wru allow 1-2:1.0
 wru allow --permanent 1-2:1.0
 ```
 
-## 🔧 Configuration
+##  Configuration
 
 ### Threat Scoring Thresholds
 
@@ -181,7 +181,7 @@ Edit `/etc/wru/policy.json`:
 }
 ```
 
-## 📊 Threat Indicators
+##  Threat Indicators
 
 | Indicator | Score | Rationale |
 |-----------|-------|-----------|
@@ -196,7 +196,7 @@ Edit `/etc/wru/policy.json`:
 | Descriptor mutation detected | +45 | Active firmware manipulation |
 | CVE match in database | +60 | Known vulnerable device |
 
-## 🔒 Security Hardening
+##  Security Hardening
 
 ### Disable Automounting
 
@@ -218,7 +218,7 @@ GRUB_CMDLINE_LINUX="intel_iommu=on iommu=pt"
 
 Then run `sudo update-grub && sudo reboot`.
 
-## 📝 Logging
+##  Logging
 
 Logs are written to `/var/log/wru/` in JSON format:
 
@@ -243,7 +243,7 @@ Logs are written to `/var/log/wru/` in JSON format:
 }
 ```
 
-## 🧪 Testing
+##  Testing
 
 ```bash
 # Run unit tests
