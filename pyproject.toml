@@ -52,9 +52,14 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
 ]
+tray = [
+    "pystray>=0.19.0",
+    "pillow>=10.0.0",
+]
 
 [project.scripts]
 wru = "wru.cli.admin:main"
+wru-tray = "wru.tray.applet:main"
 
 [project.urls]
 Homepage = "https://github.com/example/wru"

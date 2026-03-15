@@ -40,8 +40,9 @@ AmbientCapabilities=CAP_SYS_ADMIN CAP_NET_ADMIN CAP_DAC_OVERRIDE CAP_CHOWN CAP_F
 
 # Restart policy
 Restart=on-failure
-RestartSec=5s
-WatchdogSec=30s
+RestartSec=1s
+TimeoutStopSec=8s
+WatchdogSec=5s
 
 # Logging
 StandardOutput=journal

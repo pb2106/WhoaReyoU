@@ -130,7 +130,16 @@ class StoragePreview:
         # Select partition to mount (prefer first partition, fallback to device)
         mount_device = info.partition_nodes[0] if info.partition_nodes else info.device_node
         if not mount_device or not mount_device.exists():
-            logger.error(f"Device node {mount_device} not found")
+            logger.error(f"Device node {mount_device} not found or not yet accessible")
+            return []
+
+        # Check that we can actually read the device node (permissions restored?)
+        if not os.access(mount_device, os.R_OK):
+            logger.error(
+                f"Device node {mount_device} exists but is not readable — "
+                "permissions may not have been restored yet. "
+                "Try: sudo wru allow <bus_id> first."
+            )
             return []
         
         # Create temporary mount point
@@ -148,8 +157,8 @@ import sys
 import json
 from pathlib import Path
 
-# Mount device read-only
-os.system("mount -o ro,noexec,nosuid,nodev {mount_device} {mount_point} 2>/dev/null")
+# Mount device read-only (redirect both stdout and stderr to suppress warnings)
+rc = os.system("mount -o ro,noexec,nosuid,nodev {mount_device} {mount_point} >/dev/null 2>&1")
 
 # List files
 entries = []
@@ -181,11 +190,28 @@ print(json.dumps(entries))
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await result.communicate()
-            
-            if stdout:
+
+            stdout_text = stdout.decode().strip() if stdout else ""
+            stderr_text = stderr.decode().strip() if stderr else ""
+
+            if stderr_text:
+                logger.debug(f"list_files namespace stderr: {stderr_text}")
+
+            if not stdout_text:
+                logger.warning(
+                    f"list_files: no output from namespace subprocess for {bus_id}. "
+                    f"stderr: {stderr_text or '(none)'}"
+                )
+            else:
                 import json
-                entries = json.loads(stdout.decode())
-                files = [FileEntry(**e) for e in entries]
+                try:
+                    entries = json.loads(stdout_text)
+                    files = [FileEntry(**e) for e in entries]
+                except json.JSONDecodeError as e:
+                    logger.error(
+                        f"list_files: could not parse JSON output for {bus_id}: {e}. "
+                        f"Raw output: {stdout_text[:200]!r}"
+                    )
                 
         except Exception as e:
             logger.error(f"Failed to list files: {e}")
@@ -197,6 +223,7 @@ print(json.dumps(entries))
                 pass
         
         return files
+
     
     async def scan_storage(self, bus_id: str) -> ScanResult:
         """
@@ -298,7 +325,7 @@ print(json.dumps(entries))
 import os
 import sys
 
-os.system("mount -o ro,noexec,nosuid,nodev {mount_device} {mount_point} 2>/dev/null")
+os.system("mount -o ro,noexec,nosuid,nodev {mount_device} {mount_point} >/dev/null 2>&1")
 
 file_path = "{mount_point}/{file_path.lstrip('/')}"
 try:

@@ -255,18 +255,27 @@ class DeviceAuthorization:
                 
                 auth_path.write_text("1")
                 logger.info(f"Authorized device {bus_id}")
-                
-                # Give the kernel time to enumerate interfaces
+
+                # 1. Let the kernel enumerate interfaces
                 await asyncio.sleep(0.5)
-                
-                # Trigger driver binding for the device interfaces
+
+                # 2. Bind drivers (usb-storage, usbhid, …)
                 await self._bind_drivers(bus_id)
-                
-                # Restore device node permissions after authorization
+
+                # 3. Wait for udev to finish creating nodes (sdX, sdX1, …)
+                await self._udevadm_settle()
+
+                # 4. Restore permissions on ALL associated block/HID nodes,
+                #    including partition nodes that only now exist.
                 info = self.get_device_info(bus_id)
                 if info:
                     await self._restore_device_node_permissions(info)
-                
+                await self._restore_all_storage_permissions(bus_id)
+
+                # 5. Tell udisks2 / the file manager about the accessible
+                #    partitions by firing change events on the block subsystem.
+                await self._trigger_block_udev_events(bus_id)
+
                 return True
                 
             except PermissionError:
@@ -375,15 +384,116 @@ class DeviceAuthorization:
     async def _restore_device_node_permissions(self, info: DeviceInfo) -> None:
         """
         Restore normal permissions to device nodes after authorization.
+        Covers the nodes that were collected before authorization (mainly the
+        raw USB bus node).  Partition nodes are handled by
+        _restore_all_storage_permissions() which runs after udevadm settle.
         """
         for node in info.dev_nodes:
             try:
                 if node.exists():
-                    # Default permissions: owner read/write, group read
-                    os.chmod(node, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP)
+                    # rw-rw---- (owner + disk group) – standard Linux convention
+                    os.chmod(node, stat.S_IRUSR | stat.S_IWUSR |
+                             stat.S_IRGRP | stat.S_IWGRP)
                     logger.debug(f"Restored permissions for: {node}")
             except (PermissionError, OSError) as e:
                 logger.warning(f"Cannot restore permissions for {node}: {e}")
+
+    # ── New helpers for post-authorization mount flow ─────────────────────
+
+    async def _udevadm_settle(self, timeout: int = 8) -> None:
+        """
+        Block until udev has finished processing all pending events.
+        This is essential so that partition nodes (sdX1, sdX2, …) exist
+        before we try to restore their permissions.
+        """
+        import subprocess
+        try:
+            subprocess.run(
+                ["udevadm", "settle", f"--timeout={timeout}"],
+                capture_output=True,
+                timeout=timeout + 2,
+            )
+            logger.debug("udevadm settle completed")
+        except Exception as e:
+            logger.debug(f"udevadm settle failed (non-fatal): {e}")
+
+    def _find_all_block_nodes(self, bus_id: str) -> list[Path]:
+        """
+        Walk /sys/block for every sdX whose sysfs 'device' symlink resolves
+        through bus_id, then collect both the whole-disk node and any
+        partition nodes (sdX1, sdX2, …).
+
+        Returns a list of existing /dev/* Path objects.
+        """
+        found: list[Path] = []
+        sys_block = Path("/sys/block")
+        if not sys_block.exists():
+            return found
+
+        for block_dir in sys_block.glob("sd*"):
+            try:
+                dev_link = (block_dir / "device").resolve()
+                if bus_id not in str(dev_link):
+                    continue
+
+                # Whole-disk node
+                disk_node = Path("/dev") / block_dir.name
+                if disk_node.exists():
+                    found.append(disk_node)
+
+                # Partition nodes live inside the block dir (sdX/sdXN)
+                for part_dir in block_dir.glob(f"{block_dir.name}[0-9]*"):
+                    part_node = Path("/dev") / part_dir.name
+                    if part_node.exists():
+                        found.append(part_node)
+
+            except OSError:
+                pass
+
+        return found
+
+    async def _restore_all_storage_permissions(self, bus_id: str) -> None:
+        """
+        Restore rw-rw---- (0660) on every block/partition node associated with
+        bus_id, discovered live from /sys/block after udev has settled.
+        This catches sdX1, sdX2, … that did not exist before the driver bound.
+        """
+        nodes = self._find_all_block_nodes(bus_id)
+        if not nodes:
+            logger.debug(f"No block nodes found for {bus_id} (not a storage device or nodes not yet visible)")
+            return
+
+        for node in nodes:
+            try:
+                os.chmod(node, stat.S_IRUSR | stat.S_IWUSR |
+                         stat.S_IRGRP | stat.S_IWGRP)   # 0660
+                logger.info(f"Restored storage node permissions: {node}")
+            except (PermissionError, OSError) as e:
+                logger.warning(f"Cannot restore storage node {node}: {e}")
+
+    async def _trigger_block_udev_events(self, bus_id: str) -> None:
+        """
+        Fire udev 'change' events on the block subsystem so that udisks2
+        (and therefore the desktop file manager / device notifier) learns
+        that the partition nodes are now accessible and offers to mount them.
+
+        We use --action=change rather than --action=add because the block
+        devices already exist; we are just updating their accessibility.
+        """
+        import subprocess
+        try:
+            subprocess.run(
+                [
+                    "udevadm", "trigger",
+                    "--action=change",
+                    "--subsystem-match=block",
+                ],
+                capture_output=True,
+                timeout=5,
+            )
+            logger.info(f"Triggered block udev change events for {bus_id}")
+        except Exception as e:
+            logger.debug(f"udevadm trigger block failed (non-fatal): {e}")
     
     def set_hub_defaults(self) -> int:
         """

@@ -229,8 +229,14 @@ async def allow(bus_id: str, permanent: bool):
         console.print(f"[green]✓ Device {bus_id} authorized[/]")
         
         if permanent:
+            _add_to_policy("allowlist", {
+                "vendor_id": device.vendor_id,
+                "product_id": device.product_id,
+                "serial": device.serial or "*",
+                "description": f"{device.manufacturer or ''} {device.product or ''}".strip(),
+            })
             console.print(
-                f"[yellow]TODO: Add {device.device_id} to permanent allowlist[/]"
+                f"[green]✓ Added {device.device_id} to permanent allowlist[/]"
             )
     else:
         console.print(f"[red]✗ Failed to authorize device {bus_id}[/]")
@@ -487,6 +493,164 @@ def _format_size(size: int) -> str:
             return f"{size:.0f} {unit}"
         size /= 1024
     return f"{size:.1f} TB"
+
+
+def _add_to_policy(list_name: str, entry: dict) -> None:
+    """Add an entry to policy.json (allowlist or blocklist)."""
+    policy_path = Path("/etc/wru/policy.json")
+    try:
+        policy: dict = {}
+        if policy_path.exists():
+            with open(policy_path) as f:
+                policy = json.load(f)
+        policy.setdefault("allowlist", [])
+        policy.setdefault("blocklist", [])
+
+        # Avoid duplicates (same vendor+product+serial)
+        existing = policy[list_name]
+        for item in existing:
+            if (item.get("vendor_id") == entry.get("vendor_id")
+                    and item.get("product_id") == entry.get("product_id")
+                    and item.get("serial") == entry.get("serial")):
+                return   # already present
+
+        policy[list_name].append(entry)
+        with open(policy_path, "w") as f:
+            json.dump(policy, f, indent=2)
+    except PermissionError:
+        console.print("[red]✗ Permission denied writing policy.json (run with sudo)[/]")
+    except Exception as e:
+        console.print(f"[red]✗ Failed to update policy: {e}[/]")
+
+# ─────────────────────── wru vm subcommands ──────────────────────────────────
+
+@cli.group()
+def vm():
+    """Manage QEMU VM analysis image."""
+    pass
+
+
+@vm.command("create-image")
+@async_command
+async def vm_create_image():
+    """
+    Download Alpine Linux virt ISO and set up the WRU VM analysis image.
+
+    Run this once after installation to enable VM-based behavioral analysis.
+    Requires internet access and ~60 MB of disk space.
+    """
+    import os
+    from wru.analysis.vm import create_vm_image, _DEFAULT_ISO_PATH
+
+    if os.geteuid() != 0:
+        console.print("[red]✗ This command requires root privileges[/]")
+        console.print("[yellow]⚠ Run: sudo wru vm create-image[/]")
+        sys.exit(1)
+
+    console.print("[bold blue]Setting up WRU VM analysis image…[/]")
+    console.print(f"[dim]ISO destination: {_DEFAULT_ISO_PATH}[/]")
+    console.print("[dim]This downloads ~55 MB and may take a minute.[/]\n")
+
+    with console.status("[blue]Downloading Alpine Linux virt ISO…"):
+        success = await create_vm_image()
+
+    if success:
+        console.print("[green]✓ VM image setup complete[/]")
+        console.print(f"[dim]  ISO : {_DEFAULT_ISO_PATH}[/]")
+        console.print("\n[bold]Enable VM analysis:[/]")
+        console.print("[dim]  Set enable_vm_analysis: true in /etc/wru/daemon.json[/]")
+        console.print("[dim]  Then restart: sudo systemctl restart wru-daemon[/]")
+    else:
+        console.print("[red]✗ VM image setup failed – check logs above[/]")
+        sys.exit(1)
+
+
+@vm.command("analyze")
+@click.argument("bus_id")
+@async_command
+async def vm_analyze(bus_id: str):
+    """
+    Run VM behavioral analysis on a specific USB device.
+
+    BUS_ID should be in format like '1-2'. Use 'wru list' to find bus IDs.
+    """
+    import os
+    from wru.core.authorization import DeviceAuthorization
+    from wru.analysis.vm import VMAnalyzer
+
+    if os.geteuid() != 0:
+        console.print("[red]✗ VM analysis requires root privileges[/]")
+        sys.exit(1)
+
+    auth = DeviceAuthorization()
+    device = auth.get_device_info(bus_id)
+    if not device:
+        console.print(f"[red]✗ Device {bus_id} not found[/]")
+        sys.exit(1)
+
+    analyzer = VMAnalyzer()
+    if not await analyzer.check_available():
+        console.print("[red]✗ VM analysis not available[/]")
+        console.print("[yellow]⚠ Run first: sudo wru vm create-image[/]")
+        sys.exit(1)
+
+    console.print(f"[bold]Running VM analysis on {bus_id}…[/]")
+    console.print(
+        f"[dim]{device.manufacturer or 'Unknown'} {device.product or 'Unknown'}[/]"
+    )
+    console.print("[dim]This may take up to 45 seconds.[/]\n")
+
+    with console.status("[blue]VM running…"):
+        result = await analyzer.analyze(
+            vendor_id=device.vendor_id,
+            product_id=device.product_id,
+        )
+
+    if result.error:
+        console.print(f"[red]✗ Analysis error: {result.error}[/]")
+        sys.exit(1)
+
+    # Results panel
+    findings: list[tuple[str, str]] = []
+    if result.hid_injection_detected:
+        findings.append(("HID Injection", "red"))
+    if result.descriptor_mutation_detected:
+        findings.append(("Descriptor Mutation", "red"))
+    if result.network_activity_detected:
+        findings.append(("USB Network Activity", "yellow"))
+
+    if findings:
+        console.print(Panel(
+            Text.assemble(
+                ("Status: ", "bold"), ("⚠ SUSPICIOUS\n\n", "red bold"),
+                ("Findings:\n", "bold"),
+                *[(f"  • {name}\n", color) for name, color in findings],
+                (f"\nDuration: {result.analysis_duration_seconds:.1f}s", "dim"),
+            ),
+            title="[bold red]VM Analysis Result[/]",
+            border_style="red",
+        ))
+    else:
+        console.print(Panel(
+            Text.assemble(
+                ("Status: ", "bold"), ("✓ Clean\n", "green bold"),
+                (f"Duration: {result.analysis_duration_seconds:.1f}s", "dim"),
+            ),
+            title="[bold green]VM Analysis Result[/]",
+            border_style="green",
+        ))
+
+
+# ─────────────── wru tray ─────────────────────────────────────────────────────
+
+@cli.command()
+def tray():
+    """Launch the WRU system-tray notification applet."""
+    from wru.tray.applet import main as tray_main
+    tray_main()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 @cli.command()
 @async_command

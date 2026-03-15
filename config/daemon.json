@@ -1,0 +1,14 @@
+{
+    "config_dir": "/etc/wru",
+    "log_dir": "/var/log/wru",
+    "run_dir": "/run/wru",
+    "auto_allow_threshold": 19,
+    "quarantine_threshold": 39,
+    "analyze_threshold": 69,
+    "enable_hid_monitoring": true,
+    "enable_network_isolation": true,
+    "enable_vm_analysis": true,
+    "enable_clamav": true,
+    "log_level": "INFO",
+    "json_logging": true
+}

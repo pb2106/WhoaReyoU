@@ -52,6 +52,9 @@ echo -e "${GREEN}[3/7] Installing configuration files...${NC}"
 cp -n "${PROJECT_DIR}/config/threat-rules.yaml" /etc/wru/ 2>/dev/null || true
 cp -n "${PROJECT_DIR}/config/policy.json" /etc/wru/ 2>/dev/null || true
 cp -n "${PROJECT_DIR}/config/cve-database.json" /etc/wru/ 2>/dev/null || true
+# Deploy default daemon config (never overwrite existing)
+cp -n "${PROJECT_DIR}/config/daemon.json" /etc/wru/ 2>/dev/null || true
+echo "  Deployed daemon.json"
 
 # Step 4: Install udev rules
 echo -e "${GREEN}[4/7] Installing udev rules...${NC}"
